@@ -17,6 +17,8 @@
 
 ## 运行
 
+本地进程方式：
+
 ```bash
 cp .env.example .env                    # 填 DASHSCOPE_API_KEY
 docker compose up -d kafka redis        # 本地依赖
@@ -25,7 +27,18 @@ python -m backend.response_service      # 进程 2
 uvicorn backend.api:app --host 0.0.0.0 --port 8000   # 必须单 worker，禁止 --workers > 1
 ```
 
-配置全部来自 `.env`（`backend/config.py` 加载）：`DASHSCOPE_API_KEY`、`QWEN_BASE_URL`、`QWEN_MODEL`、`KAFKA_BOOTSTRAP`、`REDIS_URL`、`LLM_TIMEOUT_SECONDS` 等。
+Docker 方式（镜像包含三个进程，compose 一并起 Kafka/Redis）：
+
+```bash
+docker build -t support-agent:latest .
+docker compose up -d --no-build       # http://localhost:8000
+docker compose logs -f api
+docker compose down
+```
+
+> 本机 `docker compose build` 受 Compose/Buildx 与中文路径的兼容问题影响，统一用 `docker build` + `--no-build`。
+
+配置全部来自 `.env`（`backend/config.py` 加载）：`DASHSCOPE_API_KEY`、`QWEN_BASE_URL`、`QWEN_MODEL`、`KAFKA_BOOTSTRAP`、`REDIS_URL`、`LLM_TIMEOUT_SECONDS` 等。容器内由 compose 注入 `KAFKA_BOOTSTRAP=kafka:29092`、`REDIS_URL=redis://redis:6379/0` 和 `DOTENV_OVERRIDE=false`，不要让容器再用 `localhost`。
 
 ## 最容易写错的点
 

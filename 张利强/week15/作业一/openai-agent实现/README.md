@@ -112,7 +112,9 @@
 │   └── index.html               # 前端示例（EventSource 对接）
 ├── .env.example                 # 配置模板（复制为 .env 后填写）
 ├── .env                         # 本地配置，已被 .gitignore 忽略
-├── docker-compose.yml           # 本地 Kafka + Redis
+├── Dockerfile                   # 三进程共用镜像
+├── .dockerignore                # 排除 .env / .venv / logs 等
+├── docker-compose.yml           # Kafka + Redis + 三个业务服务
 ├── requirements.txt
 └── README.md
 ```
@@ -241,6 +243,64 @@ uvicorn backend.api:app --host 0.0.0.0 --port 8000
 ```
 
 > ⚠️ **后端必须单 worker 运行**。当前 `stream_queues`（`request_id → asyncio.Queue`）为进程内内存结构，多 worker 会导致 SSE 路由失败。进程 1 / 进程 2 可水平扩展多个实例（相同 `group_id` 的 consumer 会自动负载均衡），后端 QPS 压力由 Kafka 异步化吸收。
+
+---
+
+## Docker 部署
+
+三个进程共用同一个镜像，只是启动命令不同；`docker-compose.yml` 同时管理 Kafka、Redis 与三个服务。
+
+### 1. 构建镜像
+
+```bash
+docker build -t support-agent:latest .
+```
+
+镜像基于 `python:3.12-slim`，只包含 `backend/` 与 `frontend/`，以非 root 用户 `appuser` 运行；`.env`、日志、`.venv` 由 `.dockerignore` 排除，不会打进镜像。
+
+### 2. 一条命令启动全栈
+
+```bash
+docker compose up -d --no-build
+docker compose ps
+docker compose logs -f api
+```
+
+> 本机 Compose v5 的 `docker compose build` 会因项目路径含中文触发 Buildx bake 报错（`x-docker-expose-session-sharedkey` 非 ASCII），因此先用上面的 `docker build` 构建，再以 `--no-build` 启动。更新代码后重复这两步即可。
+
+启动后访问 http://localhost:8000 即可对话。三个容器的启动命令：
+
+| 服务 | command |
+|---|---|
+| `sentiment` | `python -m backend.sentiment_service` |
+| `response` | `python -m backend.response_service` |
+| `api` | `uvicorn backend.api:app --host 0.0.0.0 --port 8000`（单 worker） |
+
+### 3. 容器内配置
+
+- `.env` 通过 compose 的 `env_file` 注入容器，Key 不打进镜像。
+- 容器内 `KAFKA_BOOTSTRAP=kafka:29092`、`REDIS_URL=redis://redis:6379/0`，由 compose 的 `environment` 覆盖 `.env` 中的 `localhost` 值（同时设置 `DOTENV_OVERRIDE=false`，让编排层配置优先）。
+- Kafka 对外仍暴露 `localhost:9092`，容器网络内走 `kafka:29092`（双监听器）。
+
+### 4. 单独运行某个进程
+
+```bash
+docker run --rm --network support-net \
+  --env-file .env \
+  -e DOTENV_OVERRIDE=false \
+  -e KAFKA_BOOTSTRAP=kafka:29092 \
+  -e REDIS_URL=redis://redis:6379/0 \
+  support-agent:latest python -m backend.sentiment_service
+```
+
+### 5. 停止 / 清理
+
+```bash
+docker compose down            # 停止并删除容器（保留镜像）
+docker compose down -v         # 同时删除 Kafka / Redis 数据卷
+```
+
+> **端口冲突**：compose 会占用宿主机 `9092`（Kafka）和 `6379`（Redis）。如果本机已用 `brew services start kafka redis` 启动过，请先 `brew services stop kafka redis`，否则 `docker compose up` 会报端口被占用。两种方式二选一，不要同时运行。
 
 ---
 

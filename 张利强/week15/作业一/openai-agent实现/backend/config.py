@@ -11,8 +11,16 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-# .env 是本项目唯一配置来源：同名 shell 变量（可能是过期值）不覆盖它。
-load_dotenv(BASE_DIR / ".env", override=True)
+# 本地运行：.env 是本项目唯一配置来源，同名 shell 变量（可能是过期值）不覆盖它。
+# 容器运行：docker-compose 通过 env_file 注入配置，并设 DOTENV_OVERRIDE=false，
+# 让编排层传入的 KAFKA_BOOTSTRAP / REDIS_URL 等优先（.env 本身不会打进镜像）。
+_DOTENV_OVERRIDE = os.getenv("DOTENV_OVERRIDE", "true").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+load_dotenv(BASE_DIR / ".env", override=_DOTENV_OVERRIDE)
 
 # ---- Qwen（阿里云百炼 DashScope，OpenAI 兼容接口） ----
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "").strip()
