@@ -73,12 +73,12 @@
 | 特性 | 说明 |
 |---|---|
 | **双 Agent 分离** | 情感识别 Agent 与鼓励/排解 Agent 独立定义，避免指令互相污染 |
-| **结构化输出** | 情感识别使用 `output_type` 强制输出 `sentiment` + `confidence`，杜绝自由文本解析错误 |
+| **结构化输出** | 情感识别用 Qwen JSON 模式输出，再由 Pydantic 严格校验 `sentiment` + `confidence`，杜绝自由文本解析错误 |
 | **澄清回环** | 置信度低于阈值时先追问，最多 2 轮，防止无限循环 |
 | **跨进程会话** | 基于 Redis 的 `Session` 实现，多个进程读写同一份历史，保证多轮语气连贯 |
 | **Token 级流式** | 进程 2 使用 `Runner.run_streamed()`，token 经 Redis Pub/Sub 旁路推送，SSE 抵达前端 |
 | **可靠通信** | Kafka 手动提交 offset + Redis `SET NX EX` 幂等认领 + 死信队列 |
-| **可观测** | `trace()` 包裹，携带 `request_id` / `session_id`，可在 OpenAI Dashboard 检索 |
+| **可观测** | `trace()` 包裹，携带 `request_id` / `session_id`；配置 `OPENAI_API_KEY` 后可上传 OpenAI Dashboard |
 
 ---
 
@@ -87,6 +87,7 @@
 | 层 | 技术 |
 |---|---|
 | Agent 框架 | `openai-agents`（含 `openai-agents[redis]` 扩展） |
+| 大模型 | Qwen（阿里云百炼 DashScope，OpenAI 兼容接口，默认 `qwen-plus`） |
 | 消息队列 | Apache Kafka（`aiokafka` 异步客户端） |
 | 会话存储 / Token 旁路 | Redis（`redis.asyncio`） |
 | 后端服务 | FastAPI + Uvicorn（**单 worker**） |
@@ -99,12 +100,18 @@
 
 ```
 .
-├── contracts.py                 # 共享 Pydantic 消息模型（ChatRequest / SentimentResult / ChatResponse）
-├── sentiment_service.py         # 进程 1：情感识别
-├── response_service.py          # 进程 2：澄清路由 + 鼓励/排解 + 流式发布
-├── api.py                       # FastAPI 后端：trigger + SSE stream 端点
+├── backend/
+│   ├── __init__.py
+│   ├── config.py                # 读取 .env 的统一配置
+│   ├── llm.py                   # Qwen（DashScope）模型接入
+│   ├── contracts.py             # 共享 Pydantic 消息模型
+│   ├── sentiment_service.py     # 进程 1：情感识别
+│   ├── response_service.py      # 进程 2：澄清路由 + 鼓励/排解 + 流式发布
+│   └── api.py                   # FastAPI 后端：trigger + SSE stream 端点
 ├── frontend/
 │   └── index.html               # 前端示例（EventSource 对接）
+├── .env.example                 # 配置模板（复制为 .env 后填写）
+├── .env                         # 本地配置，已被 .gitignore 忽略
 ├── docker-compose.yml           # 本地 Kafka + Redis
 ├── requirements.txt
 └── README.md
@@ -114,7 +121,7 @@
 
 ## 消息契约
 
-所有进程共享 `contracts.py` 中的 Pydantic 模型，Kafka 消息字段不允许在各进程内私自扩展。
+所有进程共享 `backend/contracts.py` 中的 Pydantic 模型，Kafka 消息字段不允许在各进程内私自扩展。
 
 ### `ChatRequest` — `chat.request`
 
@@ -174,28 +181,45 @@ redis>=5.0
 fastapi>=0.110
 uvicorn[standard]>=0.29
 pydantic>=2.6
+python-dotenv>=1.0
 ```
 
-### 3. 环境变量
+### 3. 环境变量（.env）
 
 ```bash
-export OPENAI_API_KEY="sk-..."
-export KAFKA_BOOTSTRAP="localhost:9092"
-export REDIS_URL="redis://localhost:6379/0"
+cp .env.example .env
+# 编辑 .env，至少填入 Qwen API Key：
+# DASHSCOPE_API_KEY=sk-...
+```
+
+所有配置统一放在项目根目录 `.env`，由 `backend/config.py` 加载；同名环境变量优先级更高，适合在部署平台覆盖。
+
+`.env` 主要配置：
+
+```bash
+DASHSCOPE_API_KEY=sk-...            # 必填，阿里云百炼 API Key
+QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_MODEL=qwen-plus
+KAFKA_BOOTSTRAP=localhost:9092
+REDIS_URL=redis://localhost:6379/0
 ```
 
 ---
 
 ## 配置项
 
-集中在 `response_service.py` 顶部，建议后续抽到环境变量或配置中心：
+集中在项目根目录 `.env`，由 `backend/config.py` 统一读取：
 
 | 配置 | 默认值 | 说明 |
 |---|---|---|
+| `DASHSCOPE_API_KEY` | — | **必填**，Qwen（DashScope）API Key |
+| `QWEN_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Qwen OpenAI 兼容接口地址 |
+| `QWEN_MODEL` | `qwen-plus` | 使用的 Qwen 模型 |
 | `CONFIDENCE_THRESHOLD` | `0.7` | 低于此置信度触发澄清 |
 | `MAX_CLARIFICATION_ROUNDS` | `2` | 最大澄清轮次，达到后强制生成最终回复 |
 | `SESSION_TTL_SECONDS` | `3600` | Redis 会话历史过期时间 |
-| `LLM_TIMEOUT_SECONDS` | `120` | FastAPI 端同步等待兜底超时 |
+| `LLM_TIMEOUT_SECONDS` | `120` | 模型调用 / FastAPI 等待兜底超时 |
+| `LOG_LEVEL` | `INFO` | 日志级别 |
 
 > **阈值调优建议**：先用标注数据跑进程 1，统计置信度分布，再确定阈值。阈值过高（如 0.85）会让正常输入频繁进入澄清，体验啰嗦；过低（如 0.5）则澄清机制形同虚设。
 
@@ -207,13 +231,13 @@ export REDIS_URL="redis://localhost:6379/0"
 
 ```bash
 # 进程 1：情感识别
-python sentiment_service.py
+python -m backend.sentiment_service
 
 # 进程 2：澄清 + 鼓励/排解
-python response_service.py
+python -m backend.response_service
 
 # 后端（单 worker，切勿加 --workers > 1）
-uvicorn api:app --host 0.0.0.0 --port 8000
+uvicorn backend.api:app --host 0.0.0.0 --port 8000
 ```
 
 > ⚠️ **后端必须单 worker 运行**。当前 `stream_queues`（`request_id → asyncio.Queue`）为进程内内存结构，多 worker 会导致 SSE 路由失败。进程 1 / 进程 2 可水平扩展多个实例（相同 `group_id` 的 consumer 会自动负载均衡），后端 QPS 压力由 Kafka 异步化吸收。
@@ -287,7 +311,7 @@ uvicorn api:app --host 0.0.0.0 --port 8000
 
 **设计要点**
 
-1. **低置信度不是异常**：模型输出合法的 `positive`/`negative`，只是不够确定。这与 `output_type` 校验失败（`ModelBehaviorError`）是不同性质的问题，前者走业务路由，后者走 DLQ。
+1. **低置信度不是异常**：模型输出合法的 `positive`/`negative`，只是不够确定。这与 JSON 解析 / Pydantic 校验失败是不同性质的问题，前者走业务路由，后者走 DLQ。
 2. **硬性轮次上限**：`MAX_CLARIFICATION_ROUNDS = 2`，达到后不再追问，避免用户陷入死循环。
 3. **澄清问题不写入 Session**：只有 `type="final"` 的最终回复才通过 `RedisSession.add_items()` 持久化，避免污染鼓励/排解 Agent 的语气人设。
 4. **前端配合**：收到 `type="clarification"` 后，用户下一次 `POST /chat/trigger` 时把 `clarification_round` 加 1，并携带 `previous_clarification`。
@@ -413,6 +437,8 @@ with trace(
     # Agent 运行逻辑
 ```
 
+> 使用 Qwen 时，trace 默认只保留本地 span（没有 `OPENAI_API_KEY` 不上传）。如需在 OpenAI Dashboard 查看，在 `.env` 中配置 `OPENAI_API_KEY`。
+
 ### Guardrails（建议后续接入）
 
 进程 2 的鼓励/排解 Agent 输出前，可挂载 `output_guardrail` 检查是否包含不当内容（尤其对负面情绪用户说出刺激性话语）。
@@ -428,7 +454,13 @@ A：`stream_queues` 是进程内内存结构。多 worker 下，`chat.response` 
 A：澄清问题通常是一句短文本，token 级体验收益有限，且流式与非流式混用会抬高前端复杂度。澄清分支一次性 publish `{"type": "clarification"}` 即可。
 
 **Q：`confidence` 是模型自报的，可靠吗？**  
-A：不可靠是常态，它是 LLM 对自身判断的粗略估计。**必须用标注数据校准阈值**，而非信任原始数值。若需要更严谨的置信度，可在情感识别后接一个轻量分类器（如 BERT）做二次打分，或引入 `gpt-4o-mini` 双次投票。
+A：不可靠是常态，它是 LLM 对自身判断的粗略估计。**必须用标注数据校准阈值**，而非信任原始数值。若需要更严谨的置信度，可在情感识别后接一个轻量分类器（如 BERT）做二次打分，或让 Qwen 多次采样投票。
+
+**Q：为什么情感识别用 JSON 模式，而不是 `output_type` / `json_schema`？**  
+A：Qwen 目前只有部分模型支持 OpenAI 的 `json_schema` 严格模式；`qwen-plus` 等常用模型支持的是 `json_object`。因此情感识别 Agent 使用 JSON 模式输出，再由 Pydantic 严格校验字段与取值范围，兼容性更好，效果等价。
+
+**Q：如何改用其他 Qwen 模型？**  
+A：修改 `.env` 中的 `QWEN_MODEL` 即可（如 `qwen-turbo`、`qwen-max`），无需改代码。模型需支持 OpenAI 兼容的 Chat Completions 接口。
 
 **Q：用户关闭页面后进程 2 会怎样？**  
 A：SSE 断开触发前端 `source.close()`，后端生成器 `finally` 中清理队列并写入 `cancel:{request_id}`。进程 2 流式循环检测到取消标记后调用 `result.cancel()`，释放 LLM 资源。
