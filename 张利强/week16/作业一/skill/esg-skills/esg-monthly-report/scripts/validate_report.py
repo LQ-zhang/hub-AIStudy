@@ -17,8 +17,10 @@ from pathlib import Path
 
 CITATION_RE = re.compile(r"\[来源:\s*https?://[^\]]+\]")
 URL_RE = re.compile(r"https?://\S+")
-DATE_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+DATE_RE = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
+SLASH_DATE_RE = re.compile(r"(?<!\d)(\d{4})/(\d{1,2})/(\d{1,2})(?!\d)")
 CN_DATE_RE = re.compile(r"(\d{4})年(\d{1,2})月(\d{1,2})日")
+CN_MONTH_RE = re.compile(r"(?<!\d)(\d{4})年(\d{1,2})月(?!\d)")
 NO_DATA_LINES = {"暂无数据", "暂无数据。"}
 TABLE_SEPARATOR_RE = re.compile(r"^\|?[\s:|-]+\|?$")
 
@@ -74,7 +76,12 @@ def validate_report_text(text: str, month: str) -> dict:
         without_urls = URL_RE.sub("", content)
         dates: list[tuple[int, int, int]] = []
         dates.extend((int(y), int(m), int(d)) for y, m, d in DATE_RE.findall(without_urls))
-        dates.extend((int(y), int(m), int(d)) for y, m, d in CN_DATE_RE.findall(without_urls))
+        dates.extend((int(y), int(m), int(d)) for y, m, d in SLASH_DATE_RE.findall(without_urls))
+        cn_date_matches = list(CN_DATE_RE.finditer(without_urls))
+        dates.extend(
+            (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+            for match in cn_date_matches
+        )
         for year, mon, day in dates:
             reason = _check_date(year, mon, day, target)
             if reason:
@@ -84,6 +91,22 @@ def validate_report_text(text: str, month: str) -> dict:
                         "reason": f"{reason}：{year:04d}-{mon:02d}-{day:02d}",
                     }
                 )
+
+        for match in CN_MONTH_RE.finditer(without_urls):
+            if any(
+                covered.start() <= match.start() and match.end() <= covered.end()
+                for covered in cn_date_matches
+            ):
+                continue
+            year, mon = int(match.group(1)), int(match.group(2))
+            reason = _check_date(year, mon, 1, target)
+            if reason:
+                violations.append(
+                    {"line": number, "reason": f"{reason}：{year:04d}-{mon:02d}"}
+                )
+
+    if checked_lines == 0:
+        violations.append({"line": 0, "reason": "报告为空，没有任何可校验内容"})
 
     return {
         "ok": not violations,

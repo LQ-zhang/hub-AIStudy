@@ -55,6 +55,61 @@ class MonthlyScriptsTest(unittest.TestCase):
         result = mod.validate_report_text(text, "2026-11")
         self.assertTrue(result["ok"])
 
+    def test_validate_report_flags_cjk_adjacent_out_of_month_date(self):
+        mod = self.load("validate_report")
+        text = "- 截至2026-10-01政策发布 [来源: https://example.com/a]\n"
+        result = mod.validate_report_text(text, "2026-11")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["violations"][0]["reason"][:4], "日期越界")
+
+    def test_validate_report_flags_slash_date_and_bare_month(self):
+        mod = self.load("validate_report")
+        text = (
+            "- 2026/10/01 政策发布 [来源: https://example.com/a]\n"
+            "- 2026年10月 政策发布 [来源: https://example.com/b]\n"
+        )
+        result = mod.validate_report_text(text, "2026-11")
+        self.assertFalse(result["ok"])
+        self.assertEqual([v["line"] for v in result["violations"]], [1, 2])
+
+    def test_validate_report_rejects_empty_or_blank_report(self):
+        mod = self.load("validate_report")
+        for text in ("", "\n\n   \n"):
+            with self.subTest(text=repr(text)):
+                result = mod.validate_report_text(text, "2026-11")
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["checked_lines"], 0)
+
+    def test_run_monthly_injects_previous_month_on_first_workday(self):
+        mod = self.load("run_monthly")
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = mod.main(["--today", "2026-11-02"])
+        self.assertEqual(code, 0)
+        self.assertEqual(stdout.getvalue().strip(), "2026-10")
+
+    def test_run_monthly_skips_non_first_workday_and_holidays(self):
+        mod = self.load("run_monthly")
+        for argv in (
+            ["--today", "2026-11-01"],
+            ["--today", "2026-11-02", "--holiday", "2026-11-02"],
+        ):
+            with self.subTest(argv=argv):
+                stderr = io.StringIO()
+                with contextlib.redirect_stderr(stderr):
+                    code = mod.main(argv)
+                self.assertEqual(code, 3)
+
+    def test_run_monthly_moves_to_next_workday_after_holiday(self):
+        mod = self.load("run_monthly")
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = mod.main(
+                ["--today", "2026-11-03", "--holiday", "2026-11-02"]
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(stdout.getvalue().strip(), "2026-10")
+
     def test_md_to_pdf_writes_nonempty_pdf(self):
         mod = self.load("md_to_pdf")
         with tempfile.TemporaryDirectory() as tmp:

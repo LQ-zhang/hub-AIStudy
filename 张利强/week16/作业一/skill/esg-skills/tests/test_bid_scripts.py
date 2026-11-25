@@ -76,6 +76,41 @@ class BidScriptsTest(unittest.TestCase):
             any(v["field"] == "source_url" and "重复" in v["reason"] for v in result["violations"])
         )
 
+    def test_validate_records_rejects_non_string_fields_and_zero_amount(self):
+        mod = self.load("validate_records")
+        records = [
+            {
+                "project_name": 123,
+                "buyer": ["甲"],
+                "winner": 456,
+                "amount_wan": 0,
+                "publish_date": "2026-11-01",
+                "category": "ESG",
+                "source_url": "https://example.com/a",
+            }
+        ]
+        result = mod.validate_records(records)
+        self.assertFalse(result["ok"])
+        fields = {v["field"] for v in result["violations"]}
+        self.assertTrue({"project_name", "buyer", "winner", "amount_wan"} <= fields)
+
+    def test_validate_records_rejects_dict_without_records_key(self):
+        mod = self.load("validate_records")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "wrong.json"
+            path.write_text('{"query": "x", "results": []}', encoding="utf-8")
+            with self.assertRaises(ValueError):
+                mod._load_records(str(path))
+
+    def test_validate_records_keeps_non_tracking_query_params(self):
+        mod = self.load("validate_records")
+        records = [
+            record(120, "https://example.com/a?id=1&utm_source=x"),
+            record(130, "https://example.com/a?id=2"),
+        ]
+        result = mod.validate_records(records)
+        self.assertTrue(result["ok"])
+
     def test_parse_amount_wan_accepts_numbers_and_rejects_units(self):
         mod = self.load("chart")
         self.assertEqual(mod.parse_amount_wan(120), 120.0)
@@ -131,6 +166,69 @@ class BidScriptsTest(unittest.TestCase):
             self.assertEqual(result["valid_amounts"], 6)
             self.assertEqual(sum(result["buckets"].values()), 6)
             self.assertTrue(Path(tmp, "six.png").exists())
+
+    def test_chart_zero_records_removes_stale_png(self):
+        mod = self.load("chart")
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = str(Path(tmp) / "stale")
+            Path(tmp, "stale.png").write_bytes(b"old")
+            result = mod.generate_chart([record(None)], prefix)
+            self.assertFalse(result["generated"])
+            self.assertFalse(Path(tmp, "stale.png").exists())
+
+    def test_chart_default_scope_excludes_tender_budget(self):
+        mod = self.load("chart")
+        records = [
+            record(10, "https://example.com/1"),
+            record(60, "https://example.com/2"),
+            record(120, "https://example.com/3"),
+            record(250, "https://example.com/4"),
+            record(600, "https://example.com/5"),
+        ]
+        records[0]["announcement_type"] = "tender"
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = str(Path(tmp) / "award")
+            result = mod.generate_chart(records, prefix)
+            self.assertEqual(result["valid_amounts"], 4)
+            self.assertEqual(result["chart"], "bar")
+            self.assertIn("仅统计中标金额", result["note"])
+
+    def test_chart_all_scope_includes_tender_budget(self):
+        mod = self.load("chart")
+        records = [
+            record(10, "https://example.com/1"),
+            record(60, "https://example.com/2"),
+            record(120, "https://example.com/3"),
+            record(250, "https://example.com/4"),
+            record(600, "https://example.com/5"),
+        ]
+        records[0]["announcement_type"] = "tender"
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = str(Path(tmp) / "all")
+            result = mod.generate_chart(records, prefix, scope="all")
+            self.assertEqual(result["valid_amounts"], 5)
+            self.assertEqual(result["chart"], "bar+pie")
+
+    def test_chart_rejects_dict_without_records_key(self):
+        mod = self.load("chart")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "wrong.json"
+            path.write_text('{"query": "x", "results": []}', encoding="utf-8")
+            with self.assertRaises(ValueError):
+                mod._load_records(str(path))
+
+    def test_daily_window_uses_shanghai_midnight(self):
+        mod = self.load("daily_window")
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        result = mod.compute_window(
+            datetime(2026, 11, 26, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+        )
+        self.assertEqual(result["start_date"], "2026-11-25")
+        self.assertEqual(result["end_date"], "2026-11-26")
+        self.assertEqual(result["timezone"], "Asia/Shanghai")
+        self.assertIn("+08:00", result["start"])
 
 
 if __name__ == "__main__":
