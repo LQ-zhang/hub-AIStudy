@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -134,8 +135,13 @@ def main(argv: list[str] | None = None) -> int:
 
     text = json.dumps(result, ensure_ascii=False, indent=2)
     if args.output:
-        with open(args.output, "w", encoding="utf-8") as handle:
-            handle.write(text + "\n")
+        try:
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(text + "\n", encoding="utf-8")
+        except OSError as exc:
+            print(f"错误：无法写入 {args.output}: {exc}", file=sys.stderr)
+            return 2
     else:
         print(text)
     return 0

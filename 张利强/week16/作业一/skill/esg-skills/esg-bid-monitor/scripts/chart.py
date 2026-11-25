@@ -62,24 +62,54 @@ def bucket_amounts(values: list[float]) -> dict[str, int]:
 
 
 def _setup_font() -> None:
-    plt.rcParams["font.sans-serif"] = FONT_CANDIDATES
+    from matplotlib import font_manager
+
+    available = {font.name for font in font_manager.fontManager.ttflist}
+    chosen = [name for name in FONT_CANDIDATES if name in available]
+    if not chosen:
+        print(
+            "警告：未找到候选中文字体，图表中的中文可能显示为方框。",
+            file=sys.stderr,
+        )
+    plt.rcParams["font.sans-serif"] = chosen + ["DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
+
+
+def _is_tender(record: dict) -> bool:
+    return record.get("announcement_type") == "tender"
 
 
 def generate_chart(
     records: list[dict],
     output_prefix: str,
     title: str | None = None,
+    scope: str = "award",
 ) -> dict:
-    amounts = [
-        parse_amount_wan(record.get("amount_wan"))
-        for record in records
-        if isinstance(record, dict)
-    ]
+    if scope not in {"award", "all"}:
+        raise ValueError("scope 只能是 award 或 all")
+
+    candidates = [record for record in records if isinstance(record, dict)]
+    if scope == "award":
+        amount_records = [record for record in candidates if not _is_tender(record)]
+        excluded = len(candidates) - len(amount_records)
+    else:
+        amount_records = candidates
+        excluded = 0
+
+    amounts = [parse_amount_wan(record.get("amount_wan")) for record in amount_records]
     values = [amount for amount in amounts if amount is not None]
     counts = bucket_amounts(values)
+    output = f"{output_prefix}.png"
 
     if not values:
+        Path(output).unlink(missing_ok=True)
+        if excluded:
+            note = (
+                f"仅统计中标金额，已排除 {excluded} 条招标公告预算；"
+                "无有效中标金额，未生成图表"
+            )
+        else:
+            note = "无有效金额，未生成图表"
         return {
             "generated": False,
             "chart": None,
@@ -87,14 +117,20 @@ def generate_chart(
             "valid_amounts": 0,
             "buckets": counts,
             "output": None,
-            "note": "无有效金额，未生成图表",
+            "note": note,
         }
 
     _setup_font()
     labels = BUCKET_LABELS
     counts_list = [counts[label] for label in labels]
     chart_title = title or "ESG 招投标金额分布"
-    output = f"{output_prefix}.png"
+
+    notes: list[str] = []
+    if excluded:
+        notes.append(f"仅统计中标金额，已排除 {excluded} 条招标公告预算")
+    if len(values) < 5:
+        notes.append("样本量较小，分布仅供参考")
+    note = "；".join(notes) or None
 
     if len(values) >= 5:
         fig, (ax_bar, ax_pie) = plt.subplots(1, 2, figsize=(12, 5))
@@ -111,7 +147,6 @@ def generate_chart(
         )
         ax_pie.set_title("金额分桶占比")
         chart_type = "bar+pie"
-        note = None
     else:
         fig, ax_bar = plt.subplots(figsize=(8, 5))
         ax_bar.bar(labels, counts_list, color="#4C78A8")
@@ -119,7 +154,6 @@ def generate_chart(
         ax_bar.set_ylabel("项目数")
         ax_bar.tick_params(axis="x", rotation=20)
         chart_type = "bar"
-        note = "样本量较小，分布仅供参考"
 
     fig.suptitle(chart_title)
     fig.tight_layout()
@@ -142,7 +176,9 @@ def _load_records(path: str) -> list[dict]:
     with open(path, encoding="utf-8") as handle:
         data = json.load(handle)
     if isinstance(data, dict):
-        data = data.get("records", [])
+        if "records" not in data:
+            raise ValueError("对象输入必须包含 records 键")
+        data = data["records"]
     if not isinstance(data, list):
         raise ValueError("输入必须是记录数组或包含 records 的对象")
     return data
@@ -153,6 +189,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--input", required=True, help="记录 JSON 文件")
     parser.add_argument("--output-prefix", required=True, help="输出 PNG 前缀")
     parser.add_argument("--title", default=None, help="图表标题")
+    parser.add_argument(
+        "--scope",
+        choices=("award", "all"),
+        default="award",
+        help="award=只统计中标金额（默认），all=同时统计招标预算",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -161,7 +203,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"错误：无法读取 {args.input}: {exc}", file=sys.stderr)
         return 2
 
-    result = generate_chart(records, args.output_prefix, title=args.title)
+    try:
+        result = generate_chart(
+            records, args.output_prefix, title=args.title, scope=args.scope
+        )
+    except Exception as exc:  # noqa: BLE001 - CLI 边界统一转成退出码 2
+        print(f"错误：生成图表失败：{exc}", file=sys.stderr)
+        return 2
+
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 

@@ -18,7 +18,7 @@
 - 输出语言为简体中文；每条事实陈述带 `[来源: URL]`，无数据写 `暂无数据`。
 - 检索接口固定为 `https://api.deepseek.com/v1/tools/search`，密钥从 `DEEPSEEK_API_KEY` 读取。
 - `target_month` 为 `YYYY-MM`；自然月语义，不是“最近 30 天”。
-- 招投标金额单位为万元，`amount_wan` 只接受数字或 `null`；日期 `YYYY-MM-DD`；时区 `Asia/Shanghai`。
+- 招投标金额单位为万元，`amount_wan` 只接受万元正数或 `null`；日期 `YYYY-MM-DD`；时区 `Asia/Shanghai`。
 - 图表分桶固定：`(0,50]`、`(50,100]`、`(100,200]`、`(200,500]`、`>500`。
 - 文件名不含空格或多余 `.`；Skill ID 与目录名一致，kebab-case。
 - 不修改现有 `README.md`；不提交 PDF/PNG/检索缓存。
@@ -27,7 +27,7 @@
 
 - `DEEPSEEK_API_KEY` 缺失时，脚本必须退出 2 并给出明确错误，不发请求、不编造结果。
 - 有效金额为 0 时，`chart.py` 不生成空 PNG，报告写 `暂无数据`。
-- 有效记录 1–4 条时，只生成柱状图并标注“样本量较小，分布仅供参考”，不生成饼图。
+- 有效金额条数 1–4 时，只生成柱状图并标注“样本量较小，分布仅供参考”，不生成饼图。
 - 金额为千分位字符串、带“亿/万”单位、负数或非数字时，必须跳过并计数，不能静默归入错误分桶。
 - 报告存在无来源行或越界日期时，`validate_report.py` 必须退出 1 并给出行号。
 
@@ -298,7 +298,7 @@ Expected: 退出 0。
 
 - [ ] **Step 2: 写 `validate_records.py` 并测试**
 
-校验字段齐全、日期可解析、`amount_wan` 为数字或 `null`、`source_url` 为 http(s)、`source_url` 不重复。
+校验字段齐全、日期可解析、`amount_wan` 为万元正数或 `null`、`source_url` 为 http(s)、`source_url` 不重复。
 
 Run:
 ```bash
@@ -329,7 +329,7 @@ echo "exit=$?"
 ```
 Expected: `ok=true`、`total=2`、`valid=2`；`exit=0`。
 
-- [ ] **Step 3: 写 `chart.py` 并测试 0/4/6 条**
+- [ ] **Step 3: 写 `chart.py` 并测试 0、1–4、≥5 条有效金额**
 
 金额解析只接受 `int`/`float` 与纯数字字符串（可含千分位逗号）；带“亿/万”、负数、`null` 计入跳过。`matplotlib.use("Agg")`；中文字体候选 `PingFang SC`、`Heiti TC`、`STHeiti`、`Arial Unicode MS`、`DejaVu Sans`。
 

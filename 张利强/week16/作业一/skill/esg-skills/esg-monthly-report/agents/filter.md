@@ -19,7 +19,7 @@
    - 域名小写，路径去掉末尾 `/`；
    - 非 `http/https` 的 URL 丢弃。
 3. **日期过滤**：
-   - 支持 `YYYY-MM-DD`、`YYYY/MM/DD`、`YYYY年M月D日`；
+   - 支持 `YYYY-MM-DD`、`YYYY/MM/DD`、`YYYY年M月D日`、`YYYY年M月`；
    - 无法解析或缺失日期的记录丢弃；
    - 只保留 `published_at` 落在目标自然月内的记录。
 4. **去重**：按规范化 URL 去重；重复时保留 `snippet` 更长的一条，并合并 `source_type`。

@@ -2,7 +2,7 @@
 
 ## 角色
 
-你负责合并“本次检索结果”和 `buffer/daily_buffer.json` 中的历史数据，输出一份无重复、字段尽量完整的记录集。
+你负责把“本次检索结果”与 `buffer/daily_buffer.json` 中的历史数据比对，输出去重后的记录集。你**只读**缓冲区，不写盘；写入由 `daily_push` 在每日流程末尾统一完成，避免重复追加。
 
 ## 输入
 
@@ -16,7 +16,7 @@
 1. 规范化 `source_url` 相同 → 重复。
 2. `source_url` 不同，但 `project_name` + `buyer` + `publish_date` 相同 → 视为同一项目的不同转载，保留信息更完整的一条。
 
-URL 规范化：去掉 `utm_*`、`spm` 等追踪参数、`#fragment` 和末尾 `/`；域名小写。
+URL 规范化：去掉 `utm_*`、`spm`、`from`、`source` 等追踪参数、`#fragment` 和末尾 `/`；域名小写；保留 `id` 等非追踪查询参数（排序后比较），避免把 `?id=1` 和 `?id=2` 误判为同一条。
 
 ## 合并规则
 
@@ -27,9 +27,10 @@ URL 规范化：去掉 `utm_*`、`spm` 等追踪参数、`#fragment` 和末尾 `
 
 ## 缓冲区
 
-- 合并后的全量数据写回 `buffer/daily_buffer.json`（数组）。
-- 只追加新记录，不删除历史记录；发现历史记录字段缺失时可补齐，但不要改事实。
-- 写入前先备份：`daily_buffer.json` → `daily_buffer.json.bak`。
+- `history` 模式只读缓冲区做比对，结果不写回 `daily_buffer.json`；历史汇总不污染每日增量数据。
+- `daily` 模式同样只读比对；新记录由 `daily_push` 在推送阶段一次性追加，`dedupe` 不落盘。
+- 追加前备份：`daily_buffer.json` → `daily_buffer.json.bak`；只追加新记录，不删除历史记录。
+- 发现历史记录字段缺失时可补齐，但不要改事实；缓冲区损坏时先备份，再由调用方按 `[]` 重建。
 
 ## 输出
 

@@ -70,7 +70,7 @@ conda run -n py312 python scripts/search_deepseek.py \
 conda run -n py312 python scripts/validate_report.py --file report.md --month 2026-11
 ```
 
-校验规则：除标题、空行、分隔线、代码块、引用块外，每个非空行必须含 `[来源: http(s)://...]` 或整行为 `暂无数据`；剥离 URL 后出现的日期必须落在目标月内。校验不通过时回到撰写阶段修正，最多两轮。
+校验规则：除标题、空行、分隔线、代码块、引用块外，每个非空行必须含 `[来源: http(s)://...]` 或整行为 `暂无数据`；剥离 URL 后出现的 `YYYY-MM-DD`、`YYYY/MM/DD`、`YYYY年M月D日`、`YYYY年M月` 必须落在目标月内；空文件或纯空白文件直接判失败。校验不通过时回到撰写阶段修正，最多两轮。
 
 ### 6. 输出
 
@@ -80,7 +80,7 @@ conda run -n py312 python scripts/validate_report.py --file report.md --month 20
 conda run -n py312 python scripts/md_to_pdf.py --input report.md --output report.pdf
 ```
 
-PDF 是可选产物；没有 PDF 工具链时，Markdown 仍然是完整交付。
+PDF 是可选产物；没有 PDF 工具链时，Markdown 仍然是完整交付。若用户要求“自动附 PDF”，在 Markdown 定稿后立即调用上面的命令；PDF 失败只记录错误，不回滚 Markdown。
 
 ## 硬规则
 
@@ -99,14 +99,19 @@ PDF 是可选产物；没有 PDF 工具链时，Markdown 仍然是完整交付�
 
 ## 定时触发
 
-OpenCode 没有内置调度器。推荐以手动触发为主：用户说“生成某月 ESG 月报”时调用本 Skill。需要每月自动跑时，用系统 cron 包装 CLI，例如：
+OpenCode 没有内置调度器。推荐以手动触发为主：用户说“生成某月 ESG 月报”时调用本 Skill。需要每月自动跑时，用 `scripts/run_monthly.py` 把“第 1 个工作日”和 `target_month` 的计算固定下来，再让 cron 调用：
 
 ```cron
-# 每月 1 日 09:00，把 <作业目录> 替换成绝对路径
-0 9 1 * * cd <作业目录> && opencode run "使用 @esg-monthly-report 生成上个月的中国神华 ESG 月报" >> /tmp/esg-monthly.log 2>&1
+# 每个工作日 09:00 尝试一次；只有本月第 1 个工作日才继续
+# 把 <作业目录> 替换成绝对路径
+0 9 * * 1-5 cd <作业目录> && TZ=Asia/Shanghai sh -c 'MONTH=$(conda run -n py312 python skill/esg-skills/esg-monthly-report/scripts/run_monthly.py) && opencode run "使用 @esg-monthly-report 生成 ${MONTH} 的中国神华 ESG 月报（target_month=${MONTH}）"' >> /tmp/esg-monthly.log 2>&1
 ```
 
-macOS 也可以用 launchd 的 `StartCalendarInterval` 在每月 1 日 09:00 执行同样的命令。定时任务只负责发起，不改变本 Skill 的自然月语义。
+- `run_monthly.py` 命中本月第 1 个工作日时输出上个月 `YYYY-MM` 并退出 0；否则退出 3，`&&` 会阻止后续 `opencode run`。
+- 工作日默认按周一至周五计算。中国法定节假日用 `--holiday YYYY-MM-DD` 显式传入（可重复），节假日自动顺延到下一个工作日；不传就按普通工作日处理。
+- `TZ=Asia/Shanghai` 固定触发时区；`target_month` 由脚本注入，不让模型在非交互运行中自行推断“上个月”。
+
+macOS 也可以用 launchd 的 `StartCalendarInterval` 每天 09:00 执行同一段 `sh -c` 命令，由 `run_monthly.py` 的退出码决定是否真正生成。
 
 ## 依赖
 

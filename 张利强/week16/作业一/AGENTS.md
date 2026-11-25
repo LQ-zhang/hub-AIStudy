@@ -25,8 +25,8 @@
 以 `张利强/week16/作业一/README.md` 为唯一需求来源，实现两个 OpenCode Skill：
 
 - 目录约定：设计/计划放 `skill/esg-skills-design/`，两个 Skill 放 `skill/esg-skills/`。
-- `skill/esg-skills/esg-monthly-report/`：`SKILL.md` + `agents/{policy_search,industry_peer_search,shenhua_search,filter,writer,validator}.md` + `templates/report.md` + `scripts/`；运行期使用 `peer_set.json`。
-- `skill/esg-skills/esg-bid-monitor/`：`SKILL.md` + `agents/{slice_search,extract,dedupe,daily_push,writer}.md` + `templates/` + `scripts/` + `buffer/daily_buffer.json`。
+- `skill/esg-skills/esg-monthly-report/`：`SKILL.md` + `agents/{policy_search,industry_peer_search,shenhua_search,filter,writer,validator}.md` + `templates/report.md` + `scripts/`（含 `run_monthly.py`）；运行期使用 `peer_set.json`。
+- `skill/esg-skills/esg-bid-monitor/`：`SKILL.md` + `agents/{slice_search,extract,dedupe,daily_push,writer}.md` + `templates/` + `scripts/`（含 `chart.py`、`daily_window.py`）+ `buffer/daily_buffer.json`。
 
 容易违反的业务约束：
 

@@ -192,6 +192,9 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as exc:
         print(f"错误：{exc}", file=sys.stderr)
         return 2
+    except Exception as exc:  # noqa: BLE001 - CLI 边界统一转成退出码 2
+        print(f"错误：PDF 生成失败：{exc}", file=sys.stderr)
+        return 2
 
     print(args.output)
     return 0

@@ -94,6 +94,24 @@ class BidScriptsTest(unittest.TestCase):
         fields = {v["field"] for v in result["violations"]}
         self.assertTrue({"project_name", "buyer", "winner", "amount_wan"} <= fields)
 
+    def test_validate_records_rejects_null_required_fields(self):
+        mod = self.load("validate_records")
+        records = [
+            {
+                "project_name": "P",
+                "buyer": "甲",
+                "winner": None,
+                "amount_wan": None,
+                "publish_date": None,
+                "category": None,
+                "source_url": "https://example.com/a",
+            }
+        ]
+        result = mod.validate_records(records)
+        self.assertFalse(result["ok"])
+        fields = {v["field"] for v in result["violations"]}
+        self.assertTrue({"publish_date", "category"} <= fields)
+
     def test_validate_records_rejects_dict_without_records_key(self):
         mod = self.load("validate_records")
         with tempfile.TemporaryDirectory() as tmp:

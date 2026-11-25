@@ -30,6 +30,7 @@
 ├── README.md                       # 原有作业说明，不改
 ├── AGENTS.md                       # 本目录开发约定
 ├── 交付说明.md                     # 文件地图、加载方式、限制
+├── requirements.txt                # 第三方依赖
 ├── opencode.json                   # "skills": ["./skill/esg-skills"]
 └── skill/
     ├── esg-skills-design/
@@ -49,25 +50,30 @@
         │   ├── scripts/
         │   │   ├── search_deepseek.py
         │   │   ├── validate_report.py
+        │   │   ├── run_monthly.py
         │   │   └── md_to_pdf.py
         │   └── peer_set.json
-        └── esg-bid-monitor/
-            ├── SKILL.md
-            ├── agents/
-            │   ├── slice_search.md
-            │   ├── extract.md
-            │   ├── dedupe.md
-            │   ├── daily_push.md
-            │   └── writer.md
-            ├── templates/
-            │   ├── monthly-report.md
-            │   └── daily-push.md
-            ├── scripts/
-            │   ├── search_deepseek.py
-            │   ├── validate_records.py
-            │   ├── chart.py
-            │   └── md_to_pdf.py
-            └── buffer/daily_buffer.json
+        ├── esg-bid-monitor/
+        │   ├── SKILL.md
+        │   ├── agents/
+        │   │   ├── slice_search.md
+        │   │   ├── extract.md
+        │   │   ├── dedupe.md
+        │   │   ├── daily_push.md
+        │   │   └── writer.md
+        │   ├── templates/
+        │   │   ├── monthly-report.md
+        │   │   └── daily-push.md
+        │   ├── scripts/
+        │   │   ├── search_deepseek.py
+        │   │   ├── validate_records.py
+        │   │   ├── chart.py
+        │   │   ├── daily_window.py
+        │   │   └── md_to_pdf.py
+        │   └── buffer/daily_buffer.json
+        └── tests/
+            ├── test_monthly_scripts.py
+            └── test_bid_scripts.py
 ```
 
 两个 Skill 各自复制 `search_deepseek.py` 与 `md_to_pdf.py`。这是有意为之：每个 Skill 必须能单独拷走使用，跨 Skill 引用会破坏自包含性；两个脚本都很小。
@@ -76,12 +82,12 @@
 
 ### 流程
 
-1. 调度或用户注入 `target_month`（`YYYY-MM`）。未提供时先问用户，不猜测“最近一个月”。
+1. 调度或用户注入 `target_month`（`YYYY-MM`）。未提供时先问用户，不猜测“最近一个月”。自动调度时由 `scripts/run_monthly.py` 判断第 1 个工作日并计算上个月。
 2. `policy_search`、`industry_peer_search`、`shenhua_search` 三路并行检索。后两者读取 `peer_set.json`；为空时由 AI 圈定不超过 4 家对标企业并写回。
 3. `filter` 剔除目标自然月之外的数据，按 URL 去重，保留标题、日期、摘要、来源。
 4. `writer` 按 `templates/report.md` 写 800–1200 字简报。
-5. `validator` 删除无来源陈述、修正越界日期；有硬错误时退回 writer。
-6. 输出 Markdown；用户需要时用 `scripts/md_to_pdf.py` 生成 PDF。
+5. `validator` 删除无来源陈述、修正越界日期；有硬错误时退回 writer。校验脚本同时拒绝空报告。
+6. 输出 Markdown；用户需要时用 `scripts/md_to_pdf.py` 生成 PDF（可选，不阻断 Markdown 交付）。
 
 ### 硬约束
 
@@ -95,16 +101,17 @@
 ### 工作流 A：近 2 年历史汇总
 
 1. `slice_search` 按半年度切片，组合“ESG/可持续发展/双碳 + 招标/中标”等关键词检索。
-2. `extract` 将结果转为统一 Schema；金额统一为万元，不明确填 `null`。
-3. `dedupe` 按 `source_url` 去重，并合并 `buffer/daily_buffer.json`。
-4. `chart.py` 生成金额分桶图；有效记录 ≥5 时柱状图 + 饼图，<5 时只出柱状图并注明样本量，0 条不出图。
-5. `writer` 输出带图表的 Markdown 分析报告。
+2. `extract` 将结果转为统一 Schema；金额统一为万元，不明确填 `null`，并尽量标注 `announcement_type`。
+3. `dedupe` 按 `source_url` 去重，并与 `buffer/daily_buffer.json` 比对；只读，不写盘。
+4. `validate_records.py` 校验 Schema、类型、日期、金额、URL 和重复项。
+5. `chart.py` 生成金额分桶图，默认只统计中标金额；有效金额 ≥5 时柱状图 + 饼图，1–4 时只出柱状图并注明样本量，0 条删除旧图且不出图。
+6. `writer` 输出带图表的 Markdown 分析报告。
 
 ### 工作流 B：每日新增
 
-1. 时间窗固定 `[昨天 00:00, 今天 00:00]`，时区 `Asia/Shanghai`。
-2. 检索 → 抽取 → 输出去重后的当日列表。
-3. 追加写入 `buffer/daily_buffer.json`；无记录输出 `暂无数据`。
+1. 用 `scripts/daily_window.py` 计算固定窗口 `[昨天 00:00, 今天 00:00]`，时区 `Asia/Shanghai`。
+2. 检索 → 抽取 → 去重 → `validate_records.py` 校验 → 输出去重后的当日列表。
+3. 仅由 `daily_push` 一次性追加写入 `buffer/daily_buffer.json`；无记录输出 `暂无数据`，缓冲区不变。
 
 ### 统一 Schema
 
@@ -116,11 +123,12 @@
   "amount_wan": 120.5,
   "publish_date": "YYYY-MM-DD",
   "category": "ESG/可持续/双碳",
-  "source_url": "https://..."
+  "source_url": "https://...",
+  "announcement_type": "tender 或 award（可选）"
 }
 ```
 
-`amount_wan` 只接受数字或 `null`；`winner` 在招标公告无结果时为 `null`。
+`amount_wan` 只接受万元正数或 `null`；`winner` 在招标公告无结果时为 `null`；`announcement_type` 是可选的派生字段，用来区分招标预算与中标金额。
 
 ## 6. 脚本接口
 
@@ -148,7 +156,8 @@
 
 - 跳过标题、空行、分隔线、代码围栏。
 - 其余非空行必须含 `[来源: http(s)://...]`，或整行为 `暂无数据`。
-- 剥离 URL 后扫描 `YYYY-MM-DD` / `YYYY年M月D日`，超出目标月即违规。
+- 剥离 URL 后扫描 `YYYY-MM-DD` / `YYYY/MM/DD` / `YYYY年M月D日` / `YYYY年M月`，超出目标月即违规；中文紧邻日期也能识别。
+- 空文件或纯空白文件直接判失败。
 - 输出 JSON，退出码 0/1。
 
 ### `md_to_pdf.py`
@@ -168,13 +177,15 @@
 --input 必填（数组或 {"records": [...]}）
 --output-prefix 必填
 --title 可选
+--scope award|all  默认 award
 ```
 
 - 分桶：`(0,50]`、`(50,100]`、`(100,200]`、`(200,500]`、`>500`，单位万元。
+- 默认只统计中标金额：`announcement_type="tender"` 的记录不进入金额图；`--scope all` 时计入。
 - 有效金额 ≥5：`<prefix>.png` 内柱状图 + 饼图。
 - 1–4 条：只出柱状图并加“样本量较小，分布仅供参考”。
-- 0 条：不生成文件，输出 `generated=false`。
-- 非数字金额跳过并计数，不静默归入错误桶。
+- 0 条：删除同前缀旧 PNG，不生成新文件，输出 `generated=false`。
+- 非数字、`0`、负数金额跳过并计数，不静默归入错误桶。
 
 ### `validate_records.py`
 
@@ -183,13 +194,32 @@
 --output 可选
 ```
 
-- 校验字段齐全、日期格式与真实性、`amount_wan` 数字/null、URL 协议、重复 `source_url`。
+- 校验字段齐全、字段类型、日期格式与真实性、`amount_wan` 正数/null、URL 协议、重复 `source_url`。
+- 对象输入必须显式包含 `records` 键；否则视为不可读输入。
 - 输出 JSON 与违规列表，退出码 0/1；输入不可读时退出码 2。
+
+### `run_monthly.py`
+
+```text
+--today YYYY-MM-DD 可选（测试/补跑）
+--holiday YYYY-MM-DD 可重复
+```
+
+- 命中本月第 1 个工作日时输出上个月 `YYYY-MM`，退出 0；否则退出 3。
+- 工作日默认周一至周五；节假日显式传入并顺延。
+
+### `daily_window.py`
+
+```text
+--now ISO 8601 可选（测试/补跑）
+```
+
+- 输出 `{"timezone","start","end","start_date","end_date"}`，窗口为 `[昨天 00:00, 今天 00:00]`（`Asia/Shanghai`）。
 
 ## 7. 数据与状态
 
 - `peer_set.json`：`{"peers": [], "updated_at": null}`，首次运行后写回。
-- `daily_buffer.json`：初始 `[]`，每日增量追加。
+- `daily_buffer.json`：初始 `[]`；只有 `daily` 模式的 `daily_push` 一次性追加，`history` 与 `dedupe` 只读。
 - 生成物（PDF、PNG、检索缓存）不提交；脚本默认写到调用方指定路径。
 
 ## 8. 触发策略
@@ -219,6 +249,7 @@
 
 - `skill_validate` 校验两个 `SKILL.md`。
 - `python -m py_compile` 校验全部脚本。
-- 用临时数据实跑：`chart.py` 的 0/4/6 条三种情况、两个 validator 的正常/异常输入、`md_to_pdf.py` 生成 PDF。
+- 用临时数据实跑：`chart.py` 的 0 / 1–4 / ≥5 条有效金额三种情况、两个 validator 的正常/异常输入、`md_to_pdf.py` 生成 PDF。
+- `run_monthly.py` 的第 1 个工作日/节假日顺延，`daily_window.py` 的 Asia/Shanghai 窗口。
 - `search_deepseek.py --help` 与缺失 Key 的报错路径。
 - 最终 `git status` 只包含本作业目录内的预期文件。
