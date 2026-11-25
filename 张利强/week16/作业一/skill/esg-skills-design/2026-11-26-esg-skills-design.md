@@ -17,55 +17,57 @@
 
 考虑过三种组织方式：
 
-- A. 自包含 Skill 包：`skills/<id>/` 内放 `SKILL.md`、`agents/`、`templates/`、`scripts/`，用 `opencode.json` 的 `skills` 指向 `./skills`。
+- A. 自包含 Skill 包：`skill/esg-skills/<id>/` 内放 `SKILL.md`、`agents/`、`templates/`、`scripts/`，用 `opencode.json` 的 `skills` 指向 `./skill/esg-skills`。
 - B. OpenCode 原生多 Agent：`.opencode/skills/` + `.opencode/agents/`，通过 `subagent` 工具拉起独立上下文。
 - C. 单文件提示词：每个 Skill 只有一个 `SKILL.md`。
 
-选择 **A**。原因：与作业 README 规定的目录一致，老师可直接按文件阅读；`opencode.json` 让它在当前目录下仍可被 OpenCode 发现；不引入子 Agent 的本地 ID 依赖和分散配置。代价是多 Agent 协作是“提示词分阶段”，不是真正隔离的上下文——这是文档型作业可接受的取舍。
+选择 **A**。原因：按用户要求把设计文档与 Skill 分目录存放（`skill/esg-skills-design/` 与 `skill/esg-skills/`），老师可直接按文件阅读；`opencode.json` 让它在当前目录下仍可被 OpenCode 发现；不引入子 Agent 的本地 ID 依赖和分散配置。代价是多 Agent 协作是“提示词分阶段”，不是真正隔离的上下文——这是文档型作业可接受的取舍。
 
 ## 3. 目录结构
 
 ```text
 张利强/week16/作业一/
 ├── README.md                       # 原有作业说明，不改
+├── AGENTS.md                       # 本目录开发约定
 ├── 交付说明.md                     # 文件地图、加载方式、限制
-├── opencode.json                   # "skills": ["./skills"]
-├── docs/
-│   ├── 2026-11-26-esg-skills-design.md
-│   └── superpowers/plans/2026-11-26-esg-skills.md
-└── skills/
-    ├── esg-monthly-report/
-    │   ├── SKILL.md
-    │   ├── agents/
-    │   │   ├── policy_search.md
-    │   │   ├── industry_peer_search.md
-    │   │   ├── shenhua_search.md
-    │   │   ├── filter.md
-    │   │   ├── writer.md
-    │   │   └── validator.md
-    │   ├── templates/report.md
-    │   ├── scripts/
-    │   │   ├── search_deepseek.py
-    │   │   ├── validate_report.py
-    │   │   └── md_to_pdf.py
-    │   └── peer_set.json
-    └── esg-bid-monitor/
-        ├── SKILL.md
-        ├── agents/
-        │   ├── slice_search.md
-        │   ├── extract.md
-        │   ├── dedupe.md
-        │   ├── daily_push.md
-        │   └── writer.md
-        ├── templates/
-        │   ├── monthly-report.md
-        │   └── daily-push.md
-        ├── scripts/
-        │   ├── search_deepseek.py
-        │   ├── validate_records.py
-        │   ├── chart.py
-        │   └── md_to_pdf.py
-        └── buffer/daily_buffer.json
+├── opencode.json                   # "skills": ["./skill/esg-skills"]
+└── skill/
+    ├── esg-skills-design/
+    │   ├── 2026-11-26-esg-skills-design.md
+    │   └── 2026-11-26-esg-skills-plan.md
+    └── esg-skills/
+        ├── esg-monthly-report/
+        │   ├── SKILL.md
+        │   ├── agents/
+        │   │   ├── policy_search.md
+        │   │   ├── industry_peer_search.md
+        │   │   ├── shenhua_search.md
+        │   │   ├── filter.md
+        │   │   ├── writer.md
+        │   │   └── validator.md
+        │   ├── templates/report.md
+        │   ├── scripts/
+        │   │   ├── search_deepseek.py
+        │   │   ├── validate_report.py
+        │   │   └── md_to_pdf.py
+        │   └── peer_set.json
+        └── esg-bid-monitor/
+            ├── SKILL.md
+            ├── agents/
+            │   ├── slice_search.md
+            │   ├── extract.md
+            │   ├── dedupe.md
+            │   ├── daily_push.md
+            │   └── writer.md
+            ├── templates/
+            │   ├── monthly-report.md
+            │   └── daily-push.md
+            ├── scripts/
+            │   ├── search_deepseek.py
+            │   ├── validate_records.py
+            │   ├── chart.py
+            │   └── md_to_pdf.py
+            └── buffer/daily_buffer.json
 ```
 
 两个 Skill 各自复制 `search_deepseek.py` 与 `md_to_pdf.py`。这是有意为之：每个 Skill 必须能单独拷走使用，跨 Skill 引用会破坏自包含性；两个脚本都很小。

@@ -4,11 +4,11 @@
 
 **Goal:** 在 `张利强/week16/作业一/` 内交付两个可读、可加载的 OpenCode Skill（ESG 月报、ESG 招投标监控），脚本接口完整、可运行部分实际运行。
 
-**Architecture:** 自包含 Skill 包（方案 A）。每个 Skill 用 `SKILL.md` 编排阶段，`agents/` 存阶段提示词，`templates/` 存输出模板，`scripts/` 存检索、校验、图表、PDF 工具；根级 `opencode.json` 通过 `skills: ["./skills"]` 发现技能。
+**Architecture:** 自包含 Skill 包（方案 A）。每个 Skill 用 `SKILL.md` 编排阶段，`agents/` 存阶段提示词，`templates/` 存输出模板，`scripts/` 存检索、校验、图表、PDF 工具；根级 `opencode.json` 通过 `skills: ["./skill/esg-skills"]` 发现技能。
 
 **Tech Stack:** Python 3.12（conda `py312`）、requests、pandas、matplotlib、reportlab、Markdown。
 
-**Spec:** `docs/2026-11-26-esg-skills-design.md`
+**Spec:** `skill/esg-skills-design/2026-11-26-esg-skills-design.md`
 
 ## Global Constraints
 
@@ -37,29 +37,29 @@
 
 **Files:**
 - Create: `opencode.json`
-- Keep: `AGENTS.md`、`docs/2026-11-26-esg-skills-design.md`、本计划
+- Keep: `AGENTS.md`、`skill/esg-skills-design/2026-11-26-esg-skills-design.md`、本计划
 
 **Interfaces:**
-- Produces: `opencode.json` 的 `"skills": ["./skills"]`，让 OpenCode 在作业目录为工作目录时发现两个 Skill。
+- Produces: `opencode.json` 的 `"skills": ["./skill/esg-skills"]`，让 OpenCode 在作业目录为工作目录时发现两个 Skill。
 
 - [ ] **Step 1: 写 `opencode.json`**
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "skills": ["./skills"]
+  "skills": ["./skill/esg-skills"]
 }
 ```
 
 - [ ] **Step 2: 校验 JSON**
 
 Run: `conda run -n py312 python -c "import json; d=json.load(open('opencode.json')); print(d['skills'])"`
-Expected: `['./skills']`
+Expected: `['./skill/esg-skills']`
 
 - [ ] **Step 3: 提交骨架**
 
 ```bash
-git add opencode.json AGENTS.md docs/2026-11-26-esg-skills-design.md docs/superpowers/plans/2026-11-26-esg-skills.md
+git add opencode.json AGENTS.md skill/esg-skills-design/2026-11-26-esg-skills-design.md skill/esg-skills-design/2026-11-26-esg-skills-plan.md
 git commit -m "张利强 week16 ESG双Skill 作业骨架"
 ```
 
@@ -68,15 +68,15 @@ git commit -m "张利强 week16 ESG双Skill 作业骨架"
 ### Task 2: 月报 Skill 文档
 
 **Files:**
-- Create: `skills/esg-monthly-report/SKILL.md`
-- Create: `skills/esg-monthly-report/agents/policy_search.md`
-- Create: `skills/esg-monthly-report/agents/industry_peer_search.md`
-- Create: `skills/esg-monthly-report/agents/shenhua_search.md`
-- Create: `skills/esg-monthly-report/agents/filter.md`
-- Create: `skills/esg-monthly-report/agents/writer.md`
-- Create: `skills/esg-monthly-report/agents/validator.md`
-- Create: `skills/esg-monthly-report/templates/report.md`
-- Create: `skills/esg-monthly-report/peer_set.json`
+- Create: `skill/esg-skills/esg-monthly-report/SKILL.md`
+- Create: `skill/esg-skills/esg-monthly-report/agents/policy_search.md`
+- Create: `skill/esg-skills/esg-monthly-report/agents/industry_peer_search.md`
+- Create: `skill/esg-skills/esg-monthly-report/agents/shenhua_search.md`
+- Create: `skill/esg-skills/esg-monthly-report/agents/filter.md`
+- Create: `skill/esg-skills/esg-monthly-report/agents/writer.md`
+- Create: `skill/esg-skills/esg-monthly-report/agents/validator.md`
+- Create: `skill/esg-skills/esg-monthly-report/templates/report.md`
+- Create: `skill/esg-skills/esg-monthly-report/peer_set.json`
 
 **Interfaces:**
 - Produces: Skill ID `esg-monthly-report`；输入 `target_month`（`YYYY-MM`，必填）、`include_peers`（布尔，默认 `false`）。
@@ -110,24 +110,24 @@ description: 生成中国神华 ESG 月度简报：按自然月检索国内 ESG 
 
 - [ ] **Step 4: 校验结构**
 
-Run: `conda run -n py312 python -c "import json; print(json.load(open('skills/esg-monthly-report/peer_set.json')))"`
+Run: `conda run -n py312 python -c "import json; print(json.load(open('skill/esg-skills/esg-monthly-report/peer_set.json')))"`
 Expected: `{'peers': [], 'updated_at': None}`
 
-Run: `skill_validate(skillPath=".../skills/esg-monthly-report")`
+Run: `skill_validate(skillPath=".../skill/esg-skills/esg-monthly-report")`
 Expected: 校验通过，无 frontmatter/name/description 错误。
 
 - [ ] **Step 5: 检查关键约束是否写进文档**
 
-Run: `grep -c "\[来源: URL\]" skills/esg-monthly-report/SKILL.md`
+Run: `grep -c "\[来源: URL\]" skill/esg-skills/esg-monthly-report/SKILL.md`
 Expected: ≥1
 
-Run: `grep -c "target_month" skills/esg-monthly-report/SKILL.md`
+Run: `grep -c "target_month" skill/esg-skills/esg-monthly-report/SKILL.md`
 Expected: ≥1
 
 - [ ] **Step 6: 提交**
 
 ```bash
-git add skills/esg-monthly-report
+git add skill/esg-skills/esg-monthly-report
 git commit -m "张利强 week16 ESG月报 Skill 作业"
 ```
 
@@ -136,9 +136,9 @@ git commit -m "张利强 week16 ESG月报 Skill 作业"
 ### Task 3: 月报脚本
 
 **Files:**
-- Create: `skills/esg-monthly-report/scripts/search_deepseek.py`
-- Create: `skills/esg-monthly-report/scripts/validate_report.py`
-- Create: `skills/esg-monthly-report/scripts/md_to_pdf.py`
+- Create: `skill/esg-skills/esg-monthly-report/scripts/search_deepseek.py`
+- Create: `skill/esg-skills/esg-monthly-report/scripts/validate_report.py`
+- Create: `skill/esg-skills/esg-monthly-report/scripts/md_to_pdf.py`
 
 **Interfaces:**
 - `search_deepseek.py`：CLI `--query`（必填）、`--start`、`--end`、`--site`（可重复）、`--limit`（默认 20）、`--output`；环境变量 `DEEPSEEK_API_KEY`；成功输出 `{"query","start","end","results":[{"title","url","snippet","published_at"}]}`；退出码 0/2/3。
@@ -151,10 +151,10 @@ git commit -m "张利强 week16 ESG月报 Skill 作业"
 
 - [ ] **Step 2: 校验检索脚本的失败路径**
 
-Run: `conda run -n py312 python skills/esg-monthly-report/scripts/search_deepseek.py --help`
+Run: `conda run -n py312 python skill/esg-skills/esg-monthly-report/scripts/search_deepseek.py --help`
 Expected: 打印用法，退出 0。
 
-Run: `env -u DEEPSEEK_API_KEY conda run -n py312 python skills/esg-monthly-report/scripts/search_deepseek.py --query test`
+Run: `env -u DEEPSEEK_API_KEY conda run -n py312 python skill/esg-skills/esg-monthly-report/scripts/search_deepseek.py --query test`
 Expected: stderr 含 `DEEPSEEK_API_KEY`，退出 2。
 
 - [ ] **Step 3: 写 `validate_report.py` 并测试正常/异常输入**
@@ -170,7 +170,7 @@ cat > "$TMP/bad.md" <<'EOF'
 - 2026-10-01 越界 [来源: https://example.com/a]
 - 正常陈述 [来源: https://example.com/b]
 EOF
-conda run -n py312 python skills/esg-monthly-report/scripts/validate_report.py --file "$TMP/bad.md" --month 2026-11
+conda run -n py312 python skill/esg-skills/esg-monthly-report/scripts/validate_report.py --file "$TMP/bad.md" --month 2026-11
 echo "exit=$?"
 ```
 Expected: JSON 中 `ok=false`，违规行号为 2、3；`exit=1`。
@@ -182,7 +182,7 @@ cat > "$TMP/good.md" <<'EOF'
 - 2026-11-05 某政策发布 [来源: https://example.com/a]
 - 暂无数据
 EOF
-conda run -n py312 python skills/esg-monthly-report/scripts/validate_report.py --file "$TMP/good.md" --month 2026-11
+conda run -n py312 python skill/esg-skills/esg-monthly-report/scripts/validate_report.py --file "$TMP/good.md" --month 2026-11
 echo "exit=$?"
 ```
 Expected: `ok=true`，`exit=0`。
@@ -191,8 +191,8 @@ Expected: `ok=true`，`exit=0`。
 
 Run:
 ```bash
-conda run -n py312 python skills/esg-monthly-report/scripts/md_to_pdf.py \
-  --input skills/esg-monthly-report/templates/report.md \
+conda run -n py312 python skill/esg-skills/esg-monthly-report/scripts/md_to_pdf.py \
+  --input skill/esg-skills/esg-monthly-report/templates/report.md \
   --output /tmp/esg-monthly-test.pdf --title "ESG 月报测试"
 test -s /tmp/esg-monthly-test.pdf && echo PDF_OK
 ```
@@ -200,11 +200,11 @@ Expected: 输出 `PDF_OK`。
 
 - [ ] **Step 5: 编译检查并提交**
 
-Run: `conda run -n py312 python -m py_compile skills/esg-monthly-report/scripts/*.py`
+Run: `conda run -n py312 python -m py_compile skill/esg-skills/esg-monthly-report/scripts/*.py`
 Expected: 退出 0，无输出。
 
 ```bash
-git add skills/esg-monthly-report/scripts
+git add skill/esg-skills/esg-monthly-report/scripts
 git commit -m "张利强 week16 ESG月报脚本 作业"
 ```
 
@@ -213,15 +213,15 @@ git commit -m "张利强 week16 ESG月报脚本 作业"
 ### Task 4: 招投标 Skill 文档
 
 **Files:**
-- Create: `skills/esg-bid-monitor/SKILL.md`
-- Create: `skills/esg-bid-monitor/agents/slice_search.md`
-- Create: `skills/esg-bid-monitor/agents/extract.md`
-- Create: `skills/esg-bid-monitor/agents/dedupe.md`
-- Create: `skills/esg-bid-monitor/agents/daily_push.md`
-- Create: `skills/esg-bid-monitor/agents/writer.md`
-- Create: `skills/esg-bid-monitor/templates/monthly-report.md`
-- Create: `skills/esg-bid-monitor/templates/daily-push.md`
-- Create: `skills/esg-bid-monitor/buffer/daily_buffer.json`
+- Create: `skill/esg-skills/esg-bid-monitor/SKILL.md`
+- Create: `skill/esg-skills/esg-bid-monitor/agents/slice_search.md`
+- Create: `skill/esg-skills/esg-bid-monitor/agents/extract.md`
+- Create: `skill/esg-skills/esg-bid-monitor/agents/dedupe.md`
+- Create: `skill/esg-skills/esg-bid-monitor/agents/daily_push.md`
+- Create: `skill/esg-skills/esg-bid-monitor/agents/writer.md`
+- Create: `skill/esg-skills/esg-bid-monitor/templates/monthly-report.md`
+- Create: `skill/esg-skills/esg-bid-monitor/templates/daily-push.md`
+- Create: `skill/esg-skills/esg-bid-monitor/buffer/daily_buffer.json`
 
 **Interfaces:**
 - Produces: Skill ID `esg-bid-monitor`；模式 `history`（近 2 年汇总）与 `daily`（每日增量）。
@@ -251,24 +251,24 @@ description: 监控国内 ESG、可持续发展、双碳相关招投标与中标
 
 - [ ] **Step 4: 校验结构**
 
-Run: `conda run -n py312 python -c "import json; print(json.load(open('skills/esg-bid-monitor/buffer/daily_buffer.json')))"`
+Run: `conda run -n py312 python -c "import json; print(json.load(open('skill/esg-skills/esg-bid-monitor/buffer/daily_buffer.json')))"`
 Expected: `[]`
 
-Run: `skill_validate(skillPath=".../skills/esg-bid-monitor")`
+Run: `skill_validate(skillPath=".../skill/esg-skills/esg-bid-monitor")`
 Expected: 校验通过。
 
 - [ ] **Step 5: 检查关键约束是否写进文档**
 
-Run: `grep -c "amount_wan" skills/esg-bid-monitor/SKILL.md`
+Run: `grep -c "amount_wan" skill/esg-skills/esg-bid-monitor/SKILL.md`
 Expected: ≥1
 
-Run: `grep -c "昨天 00:00" skills/esg-bid-monitor/SKILL.md`
+Run: `grep -c "昨天 00:00" skill/esg-skills/esg-bid-monitor/SKILL.md`
 Expected: ≥1
 
 - [ ] **Step 6: 提交**
 
 ```bash
-git add skills/esg-bid-monitor
+git add skill/esg-skills/esg-bid-monitor
 git commit -m "张利强 week16 ESG招投标 Skill 作业"
 ```
 
@@ -277,10 +277,10 @@ git commit -m "张利强 week16 ESG招投标 Skill 作业"
 ### Task 5: 招投标脚本
 
 **Files:**
-- Create: `skills/esg-bid-monitor/scripts/search_deepseek.py`（从月报复制，接口相同）
-- Create: `skills/esg-bid-monitor/scripts/md_to_pdf.py`（从月报复制，接口相同）
-- Create: `skills/esg-bid-monitor/scripts/validate_records.py`
-- Create: `skills/esg-bid-monitor/scripts/chart.py`
+- Create: `skill/esg-skills/esg-bid-monitor/scripts/search_deepseek.py`（从月报复制，接口相同）
+- Create: `skill/esg-skills/esg-bid-monitor/scripts/md_to_pdf.py`（从月报复制，接口相同）
+- Create: `skill/esg-skills/esg-bid-monitor/scripts/validate_records.py`
+- Create: `skill/esg-skills/esg-bid-monitor/scripts/chart.py`
 
 **Interfaces:**
 - `validate_records.py`：CLI `--input`、`--output`；输出 `{"ok","total","valid","violations":[{"index","field","reason"}]}`；退出码 0/1/2。
@@ -290,9 +290,9 @@ git commit -m "张利强 week16 ESG招投标 Skill 作业"
 
 Run:
 ```bash
-cp skills/esg-monthly-report/scripts/search_deepseek.py skills/esg-bid-monitor/scripts/
-cp skills/esg-monthly-report/scripts/md_to_pdf.py skills/esg-bid-monitor/scripts/
-conda run -n py312 python -m py_compile skills/esg-bid-monitor/scripts/*.py
+cp skill/esg-skills/esg-monthly-report/scripts/search_deepseek.py skill/esg-skills/esg-bid-monitor/scripts/
+cp skill/esg-skills/esg-monthly-report/scripts/md_to_pdf.py skill/esg-skills/esg-bid-monitor/scripts/
+conda run -n py312 python -m py_compile skill/esg-skills/esg-bid-monitor/scripts/*.py
 ```
 Expected: 退出 0。
 
@@ -309,7 +309,7 @@ cat > "$TMP/bad.json" <<'EOF'
   {"project_name":"B","buyer":"乙","winner":"丙","amount_wan":120,"publish_date":"2026-11-01","category":"双碳","source_url":"https://example.com/b"}
 ]
 EOF
-conda run -n py312 python skills/esg-bid-monitor/scripts/validate_records.py --input "$TMP/bad.json"
+conda run -n py312 python skill/esg-skills/esg-bid-monitor/scripts/validate_records.py --input "$TMP/bad.json"
 echo "exit=$?"
 ```
 Expected: `ok=false`，列出 `amount_wan`、`publish_date`、`source_url` 违规；`exit=1`。
@@ -324,7 +324,7 @@ cat > "$TMP/good.json" <<'EOF'
   {"project_name":"B","buyer":"乙","winner":"丙","amount_wan":null,"publish_date":"2026-11-02","category":"双碳","source_url":"https://example.com/b"}
 ]
 EOF
-conda run -n py312 python skills/esg-bid-monitor/scripts/validate_records.py --input "$TMP/good.json"
+conda run -n py312 python skill/esg-skills/esg-bid-monitor/scripts/validate_records.py --input "$TMP/good.json"
 echo "exit=$?"
 ```
 Expected: `ok=true`、`total=2`、`valid=2`；`exit=0`。
@@ -347,7 +347,7 @@ cat > /tmp/esg-chart-test/six.json <<'EOF'
   {"project_name":"P6","buyer":"甲","winner":"乙","amount_wan":600,"publish_date":"2026-11-06","category":"ESG","source_url":"https://example.com/6"}
 ]
 EOF
-conda run -n py312 python skills/esg-bid-monitor/scripts/chart.py --input /tmp/esg-chart-test/six.json --output-prefix /tmp/esg-chart-test/six
+conda run -n py312 python skill/esg-skills/esg-bid-monitor/scripts/chart.py --input /tmp/esg-chart-test/six.json --output-prefix /tmp/esg-chart-test/six
 test -s /tmp/esg-chart-test/six.png && echo PNG_OK
 ```
 Expected: JSON `generated=true`、`chart="bar+pie"`、`valid_amounts=6`；输出 `PNG_OK`。
@@ -364,7 +364,7 @@ cat > /tmp/esg-chart-test/four.json <<'EOF'
   {"project_name":"P4","buyer":"甲","winner":"乙","amount_wan":250,"publish_date":"2026-11-04","category":"ESG","source_url":"https://example.com/4"}
 ]
 EOF
-conda run -n py312 python skills/esg-bid-monitor/scripts/chart.py --input /tmp/esg-chart-test/four.json --output-prefix /tmp/esg-chart-test/four
+conda run -n py312 python skill/esg-skills/esg-bid-monitor/scripts/chart.py --input /tmp/esg-chart-test/four.json --output-prefix /tmp/esg-chart-test/four
 test -s /tmp/esg-chart-test/four.png && echo PNG_OK
 ```
 Expected: `chart="bar"`、`note` 含“样本量较小，分布仅供参考”；输出 `PNG_OK`。
@@ -380,18 +380,18 @@ cat > /tmp/esg-chart-test/zero.json <<'EOF'
   {"project_name":"P2","buyer":"甲","winner":"乙","amount_wan":"暂无数据","publish_date":"2026-11-02","category":"ESG","source_url":"https://example.com/2"}
 ]
 EOF
-conda run -n py312 python skills/esg-bid-monitor/scripts/chart.py --input /tmp/esg-chart-test/zero.json --output-prefix /tmp/esg-chart-test/zero
+conda run -n py312 python skill/esg-skills/esg-bid-monitor/scripts/chart.py --input /tmp/esg-chart-test/zero.json --output-prefix /tmp/esg-chart-test/zero
 test ! -e /tmp/esg-chart-test/zero.png && echo NO_PNG
 ```
 Expected: `generated=false`、`valid_amounts=0`；输出 `NO_PNG`。
 
 - [ ] **Step 4: 编译检查并提交**
 
-Run: `conda run -n py312 python -m py_compile skills/esg-bid-monitor/scripts/*.py`
+Run: `conda run -n py312 python -m py_compile skill/esg-skills/esg-bid-monitor/scripts/*.py`
 Expected: 退出 0。
 
 ```bash
-git add skills/esg-bid-monitor/scripts
+git add skill/esg-skills/esg-bid-monitor/scripts
 git commit -m "张利强 week16 ESG招投标脚本 作业"
 ```
 
@@ -408,17 +408,17 @@ git commit -m "张利强 week16 ESG招投标脚本 作业"
 
 - [ ] **Step 1: 写 `交付说明.md`**
 
-包含：两个 Skill 的一句话说明；目录树；如何加载（在作业目录运行 OpenCode，`opencode.json` 自动发现 `./skills`）；触发示例（中英文关键词）；`DEEPSEEK_API_KEY` 配置；cron/launchd 示例；无 Key、PDF 可选、定时器需外部实现的限制；已执行的校验命令与结果。
+包含：两个 Skill 的一句话说明；目录树；如何加载（在作业目录运行 OpenCode，`opencode.json` 自动发现 `./skill/esg-skills`）；触发示例（中英文关键词）；`DEEPSEEK_API_KEY` 配置；cron/launchd 示例；无 Key、PDF 可选、定时器需外部实现的限制；已执行的校验命令与结果。
 
 - [ ] **Step 2: 最终结构校验**
 
-Run: `skill_validate(skillPath=".../skills/esg-monthly-report")` 与 `skill_validate(skillPath=".../skills/esg-bid-monitor")`
+Run: `skill_validate(skillPath=".../skill/esg-skills/esg-monthly-report")` 与 `skill_validate(skillPath=".../skill/esg-skills/esg-bid-monitor")`
 Expected: 两者均通过。
 
 Run: `skill_parse` 两个 Skill
 Expected: `name` 与目录名一致，`description` 非空。
 
-Run: `conda run -n py312 python -m py_compile skills/esg-monthly-report/scripts/*.py skills/esg-bid-monitor/scripts/*.py`
+Run: `conda run -n py312 python -m py_compile skill/esg-skills/esg-monthly-report/scripts/*.py skill/esg-skills/esg-bid-monitor/scripts/*.py`
 Expected: 退出 0。
 
 - [ ] **Step 3: 端到端冒烟**
